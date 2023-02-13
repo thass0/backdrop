@@ -10,6 +10,7 @@ pub struct ApplicationSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
+    pub file_dir: String,
 }
 
 pub enum Environment {
