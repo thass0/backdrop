@@ -1,11 +1,11 @@
-use api::startup::Application;
-use api::configuration::get_configuration;
-use api::telemetry::*;
+use backdrop::startup::Application;
+use backdrop::configuration::get_configuration;
+use backdrop::telemetry::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_subscriber(get_subscriber(
-        "api".into(),
+        "backdrop".into(),
         "info".into(),
         std::io::stdout,
     ));

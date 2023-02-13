@@ -1,5 +1,5 @@
 [package]
-name = "api"
+name = "backdrop"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,7 @@ path = "src/lib.rs"
 
 [[bin]]
 path = "src/main.rs"
-name = "api"
+name = "backdrop"
 
 [dependencies]
 actix-web = "4"
@@ -16,28 +16,13 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features =  ["derive"] }
 serde-aux = "3"
 config = "0.13"
-secrecy = { version = "0.8", features = ["serde"] }
 anyhow = "1"
-uuid = { version = "1", featues = ["v4", "serde"] }
 
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tracing-bunyan-formatter = "0.3"
 tracing-log = "0.1"
 tracing-actix-web = "0.6"
-
-[dependencies.sqlx]
-version = "0.6"
-default-features = false
-features = [
-  "runtime-tokio-rustls",
-  "macros",
-  "postgres",
-  "uuid",
-  "chrono",
-  "migrate",
-  "offline"
-]
 
 [dependencies.reqwest]
 version = "0.11"

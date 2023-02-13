@@ -10,8 +10,7 @@ FROM chef as builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-ENV SQLX_OFFLINE true
-RUN cargo build --release --bin email-all
+RUN cargo build --release --bin backdrop
 
 # Runtime stage
 FROM debian:bullseye-slim AS runtime
@@ -23,8 +22,8 @@ RUN apt-get update -y \
 	&& apt-get clean -y \
 	&& rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/api api
+COPY --from=builder /app/target/release/backdrop backdrop
 COPY configuration configuration
 
 ENV APP_ENVIRONMENT production
-ENTRYPOINT ["./api"]
+ENTRYPOINT ["./backdrop"]
