@@ -1,0 +1,7 @@
+target/
+Cargo.lock
+*.swp
+# configuration/local.yaml
+# .env
+# spec.yaml
+migrations/*seed_user.sql
