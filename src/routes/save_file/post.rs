@@ -9,6 +9,7 @@ use mobc_redis::redis::{AsyncCommands, RedisError};
 
 use crate::utils::error_chain_fmt;
 
+// TODO: Create generic redis error
 // Internal errors raised when calling the `save_file` endpoint.
 #[derive(thiserror::Error)]
 pub enum SaveFileError {

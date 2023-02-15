@@ -2,4 +2,4 @@ mod post;
 mod get;
 
 pub use post::save_file;
-pub use get::save_file_form;
+pub use get::{save_file_page, get_files_page};
