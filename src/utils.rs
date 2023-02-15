@@ -11,6 +11,8 @@ pub fn error_chain_fmt(
     Ok(())
 }
 
+// TODO: Custom derive macro for error_chain_fmt
+
 pub fn e500<T>(e: T) -> actix_web::Error
 where
     T: std::fmt::Debug + std::fmt::Display + 'static

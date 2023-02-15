@@ -3,4 +3,4 @@ application:
   base_url: "http://127.0.0.1"
 # On DO connecting to redis works by setting their connection
 # string as the redis_uri, using env vars.
-redis_uri: "redis://127.0.0.1:6379"
+redis_uri: "redis://127.0.0.1/"

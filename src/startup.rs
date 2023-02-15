@@ -60,7 +60,7 @@ pub async fn run(
             .route("/health_check", web::get().to(routes::health_check))
             .service(
                 web::resource("/")
-                .route(web::get().to(routes::save_file_page))
+                .route(web::get().to(routes::save_file_form))
                 .route(web::post().to(routes::save_file))
             )
             .app_data(redis_pool.clone())

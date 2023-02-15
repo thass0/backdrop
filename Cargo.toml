@@ -30,6 +30,7 @@ sanitize-filename = "0.4"
 secrecy = { version = "0.8.0", features = ["serde"] }
 mobc = "0.8.1"
 mobc-redis = "0.8.0"
+thiserror = "1.0.38"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -40,3 +41,4 @@ featues = ["json", "rustls-tls", "cookies"]
 once_cell = "1"
 tokio = { version = "1", features = ["rt", "macros"] }
 wiremock = "0.5"
+lazy_static = "1.4"

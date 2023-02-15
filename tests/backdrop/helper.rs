@@ -1,4 +1,7 @@
 use once_cell::sync::Lazy;
+use mobc::Pool;
+use mobc_redis::{RedisConnectionManager, redis};
+use secrecy::{Secret, ExposeSecret};
 
 use backdrop::startup::Application;
 use backdrop::configuration::get_configuration;
@@ -65,4 +68,17 @@ impl TestApp {
             .await
             .expect("Failed to execute request")
     }
+}
+
+lazy_static::lazy_static! {
+    static ref REDIS_URI: Secret<String> = {
+        let configuration = get_configuration().expect("Failed to read configuration");
+        configuration.redis_uri
+    };
+}
+
+pub fn get_redis_pool() -> Pool<RedisConnectionManager> {
+    let client = redis::Client::open(REDIS_URI.expose_secret().as_ref()).unwrap();
+    let manager = RedisConnectionManager::new(client);
+    Pool::builder().max_open(50).build(manager)
 }
