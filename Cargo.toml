@@ -27,6 +27,9 @@ actix-multipart = "0.5.0"
 futures-util = "0.3.26"
 uuid = { version = "1", featurs = "v4" }
 sanitize-filename = "0.4"
+secrecy = { version = "0.8.0", features = ["serde"] }
+mobc = "0.8.1"
+mobc-redis = "0.8.0"
 
 [dependencies.reqwest]
 version = "0.11"

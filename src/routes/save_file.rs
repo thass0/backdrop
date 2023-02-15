@@ -1,42 +1,42 @@
 use actix_web::{web, HttpResponse, Error};
-use actix_multipart::Multipart;
+use actix_multipart::{Multipart, Field};
 use futures_util::TryStreamExt as _;
 use uuid::Uuid;
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
+use mobc::Pool;
+use mobc_redis::{RedisConnectionManager, redis::AsyncCommands};
 
 pub async fn save_file(
-    file_dir: web::Data<PathBuf>,
+    redis_pool: web::Data<Pool<RedisConnectionManager>>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
     // Iterate over mutlipart stream.
-    while let Some(mut field) = payload.try_next().await? {
+    while let Some(field) = payload.try_next().await? {
         // multipart/form-data steam field has to contain `content_disposition`.
         let content_disposition = field.content_disposition();
-
         let file_name = content_disposition
             .get_filename()
             .map_or_else(|| Uuid::new_v4().to_string(), sanitize_filename::sanitize);
-        let file_path = file_dir.join(file_name);
 
-        // `File::create` is blocking so move it to seperate thread.
-        let mut file_handle = web::block(|| File::create(file_path)).await??;
-
-        // Write all bytes from the field the file.
-        while let Some(chunk) = field.try_next().await? {
-            // Move blocking file I/O to seperate thread again.
-            file_handle = web::block(move ||
-                // The () result of `write_all` is mapped to the file handle itself
-                // so we can return the file handle back from the closure.
-                // This way the loops keeps ownership of the file handle despite the `move`!!!
-                file_handle.write_all(&chunk).map(|_| file_handle)
-            ).await??;
-        }
+        let chunk = receive_field(field).await?;
+        let mut conn = redis_pool.get().await.unwrap();
+        let _: () = conn.set(file_name, chunk).await.unwrap();
     }
 
     Ok(HttpResponse::Ok().finish())
 }
+
+async fn receive_field<'a>(mut field: Field) -> Result<String, Error> {
+    use std::str::from_utf8;
+    let mut buf = String::new();
+    while let Some(chunk) = field.try_next().await? {
+        buf.push_str(from_utf8(&chunk).unwrap());
+    }
+    Ok(buf)
+}
+
+// TODO: Error handling
+// TODO: Integration tests
+//     Write test to connect to redis!
 
 
 pub async fn save_file_page() -> HttpResponse {
