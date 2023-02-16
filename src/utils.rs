@@ -11,7 +11,18 @@ pub fn error_chain_fmt(
     Ok(())
 }
 
-// TODO: Custom derive macro for error_chain_fmt
+macro_rules! derive_error_chain_fmt {
+    ($name:ident) => {
+        // Debug message displaying the sources of the error.
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                use crate::utils::error_chain_fmt;
+                error_chain_fmt(self, f)
+            }
+        }
+    };
+}
+pub(crate) use derive_error_chain_fmt;
 
 pub fn e500<T>(e: T) -> actix_web::Error
 where

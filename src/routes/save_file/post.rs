@@ -5,30 +5,24 @@ use futures_util::TryStreamExt as _;
 use uuid::Uuid;
 use mobc::Pool;
 use mobc_redis::RedisConnectionManager;
-use mobc_redis::redis::{AsyncCommands, RedisError};
+use mobc_redis::redis::AsyncCommands;
 
-use crate::utils::error_chain_fmt;
+use crate::utils::{derive_error_chain_fmt, e500};
+use crate::routes::errors::RedisQueryError;
 
-// TODO: Create generic redis error
 // Internal errors raised when calling the `save_file` endpoint.
 #[derive(thiserror::Error)]
 pub enum SaveFileError {
-    // Raised if getting a connection from the pool failed.
-    #[error("Redis connection pool error")]
-    PoolError(#[from] mobc::Error<RedisError>),
-    // Raised if executing a redis command failed.
-    #[error("Redis command error")]
-    RedisError(#[from] RedisError),
     /// Error for all errors raised while receiving the mutlipart payload.
     #[error(transparent)]
     ReceiveError(#[from] actix_multipart::MultipartError),
+    #[error(transparent)]
+    QueryError(#[from] RedisQueryError),
+    #[error(transparent)]
+    WebError(#[from] actix_web::Error),
 }
 
-impl std::fmt::Debug for SaveFileError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
+derive_error_chain_fmt!(SaveFileError);
 
 impl ResponseError for SaveFileError {
     fn status_code(&self) -> StatusCode {
@@ -36,9 +30,10 @@ impl ResponseError for SaveFileError {
             SaveFileError::ReceiveError(multipart_err) => {
                 multipart_err.status_code()
             },
-            SaveFileError::PoolError(_)
-            | SaveFileError::RedisError(_)
-            => StatusCode::INTERNAL_SERVER_ERROR,
+            SaveFileError::QueryError(e) => e.status_code(),
+            SaveFileError::WebError(e) => {
+                e.as_response_error().status_code()
+            },
         }
     }
 
@@ -48,8 +43,8 @@ impl ResponseError for SaveFileError {
         // a compiler error, if a new error is added but not convered here.
         match self {
             SaveFileError::ReceiveError(_)
-            | SaveFileError::PoolError(_)
-            | SaveFileError::RedisError(_)
+            | SaveFileError::WebError(_)
+            | SaveFileError::QueryError(_)
             => HttpResponse::new(self.status_code()),
         }
     }
@@ -68,8 +63,8 @@ pub async fn save_file(
             .map_or_else(|| Uuid::new_v4().to_string(), sanitize_filename::sanitize);
 
         let chunk = receive_field(field).await?;
-        let mut conn = redis_pool.get().await?;
-        let _: () = conn.set(file_name, chunk).await?;
+        let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
+        let _: () = conn.set(file_name, chunk).await.map_err(|e| RedisQueryError(e))?;
     }
 
     Ok(HttpResponse::Ok().finish())

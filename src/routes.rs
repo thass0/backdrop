@@ -1,3 +1,4 @@
+mod errors;
 mod health_check;
 mod save_file;
 mod load_file;
