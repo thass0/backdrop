@@ -3,8 +3,9 @@
 {% block content %}
   <h3>Choose a file to download</h3>
   {% for filename in files %}
-  <!-- File download link for the filename -->
-  <a>{{filename}}</a><br>
+  <a href="{{download_endpoint}}/{{filename}}" download="{{filename}}">
+    {{filename}}
+  </a><br>
   {% endfor %}
 {% endblock content %}
   
