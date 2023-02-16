@@ -10,6 +10,37 @@ use mobc_redis::redis::AsyncCommands;
 use crate::utils::{derive_error_chain_fmt, e500};
 use crate::routes::errors::RedisQueryError;
 
+// POST endpoint to upload any file to redis.
+pub async fn save_file(
+    redis_pool: web::Data<Pool<RedisConnectionManager>>,
+    mut payload: Multipart,
+) -> Result<HttpResponse, SaveFileError> {
+    // Iterate over mutlipart stream.
+    while let Some(field) = payload.try_next().await? {
+        // multipart/form-data steam field has to contain `content_disposition`.
+        let content_disposition = field.content_disposition();
+        let file_name = content_disposition
+            .get_filename()
+            .map_or_else(|| Uuid::new_v4().to_string(), sanitize_filename::sanitize);
+
+        let chunk = receive_field(field).await?;
+        let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
+        let _: () = conn.set(file_name, chunk).await.map_err(|e| RedisQueryError(e))?;
+    }
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+// Helper using in `save_file` to stream a field.
+async fn receive_field<'a>(mut field: Field) -> Result<String, SaveFileError> {
+    let mut buf = String::new();
+    while let Some(chunk) = field.try_next().await? {
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+    }
+    Ok(buf)
+}
+
+
 // Internal errors raised when calling the `save_file` endpoint.
 #[derive(thiserror::Error)]
 pub enum SaveFileError {
@@ -49,33 +80,3 @@ impl ResponseError for SaveFileError {
         }
     }
 }
-
-pub async fn save_file(
-    redis_pool: web::Data<Pool<RedisConnectionManager>>,
-    mut payload: Multipart,
-) -> Result<HttpResponse, SaveFileError> {
-    // Iterate over mutlipart stream.
-    while let Some(field) = payload.try_next().await? {
-        // multipart/form-data steam field has to contain `content_disposition`.
-        let content_disposition = field.content_disposition();
-        let file_name = content_disposition
-            .get_filename()
-            .map_or_else(|| Uuid::new_v4().to_string(), sanitize_filename::sanitize);
-
-        let chunk = receive_field(field).await?;
-        let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
-        let _: () = conn.set(file_name, chunk).await.map_err(|e| RedisQueryError(e))?;
-    }
-
-    Ok(HttpResponse::Ok().finish())
-}
-
-async fn receive_field<'a>(mut field: Field) -> Result<String, SaveFileError> {
-    let mut buf = String::new();
-    while let Some(chunk) = field.try_next().await? {
-        buf.push_str(&String::from_utf8_lossy(&chunk));
-    }
-    Ok(buf)
-}
-
-// TODO: Endpoint integration tests
