@@ -2,13 +2,35 @@
 <html lang="en">
 <head>
   {% block head %}
-  <link rel="stylesheet" href="style.css" />
   <title>{%  block title %}{%endblock title %}</title>
   {% endblock head %}
+  <style>
+  html, body {
+    height: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    background-color: #f5f6f1;
+    font-family: sans serif;
+  }
+  .content {
+    flex: 1 0 auto;
+    padding: 20px;
+  }
+  .footer {
+    border-radius: 5px;
+    flex-shrink: 0;
+    padding: 20px;
+    background-color: #d3e687;
+  }
+  </style>
 </head>
 <body>
-  <div id="content">{% block content %}{% endblock content %}</div>
-  <div id="footer">
+  <div class="content" id="content">
+    {% block content %}{% endblock content %}
+  </div>
+  <div class="footer" id="footer">
     {% block footer %}
     &copy; Copyright 2023 by Me.
     {% endblock foooter %}
