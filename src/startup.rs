@@ -69,7 +69,7 @@ pub async fn run(
                 .route(web::get().to(routes::save_file_page))
                 .route(web::post().to(routes::save_file))
             )
-            .route("/load", web::get().to(routes::load_file_page))
+            .service(routes::load_file_page)
             .service(routes::load_file)  // GET service for any file name
             .app_data(redis_pool.clone())
             .app_data(tera.clone())

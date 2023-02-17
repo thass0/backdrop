@@ -82,14 +82,13 @@ label + label {
     <label for="source-image" class="drop-container">
       <span class="drop-title">Drop your image here</span>
       or
-      <input type="file" id="source-image" accept="image/*"/ required>
+      <input type="file" name="source-image" id="source-image" accept="image/*" required />
     </label>
     <label for="source-audio" class="drop-container">
       <span class="drop-title">Drop your music here</span>
       or
-      <input type="file" id="source-audio" accept="audio/*" required/>
+      <input type="file" name="source-audio" id="source-audio" accept="audio/*" required/>
     </label>
-    <br>
-    <button type="submit" class="submit">Submit</button>
+    <button type="submit" style="margin-top: 24px;" class="submit">Submit</button>
   </form>
 {% endblock content %}

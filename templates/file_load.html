@@ -1,11 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Download a file{% endblock title %}
 {% block content %}
-  <h3>Choose a file to download</h3>
-  {% for filename in files %}
-  <a href="{{download_endpoint}}/{{filename}}" download="{{filename}}">
+  <h1>Download your backdrop video</h1>
+  <a href="{{download_endpoint}}/{{video_id}}" download="{{filename}}">
     {{filename}}
-  </a><br>
-  {% endfor %}
+  </a>
 {% endblock content %}
   

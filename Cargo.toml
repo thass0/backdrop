@@ -13,7 +13,7 @@ name = "backdrop"
 [dependencies]
 actix-web = "4"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-serde = { version = "1", features =  ["derive"] }
+serde = { version = "1", features = ["derive"] }
 serde-aux = "3"
 config = "0.13"
 anyhow = "1"
@@ -25,18 +25,15 @@ tracing-log = "0.1"
 tracing-actix-web = "0.6"
 actix-multipart = "0.5.0"
 futures-util = "0.3.26"
-uuid = { version = "1", featurs = "v4" }
+uuid = { version = "1", features = ["v4", "serde"] }
 sanitize-filename = "0.4"
 secrecy = { version = "0.8.0", features = ["serde"] }
 mobc = "0.8.1"
 mobc-redis = "0.8.0"
 thiserror = "1.0.38"
 tera = "1.17.1"
+mime = "0.3.16"
 
-[dependencies.reqwest]
-version = "0.11"
-default-features = false
-featues = ["json", "rustls-tls", "cookies"]
 
 [dev-dependencies]
 once_cell = "1"

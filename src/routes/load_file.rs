@@ -5,40 +5,60 @@ use tera::{Tera, Context};
 use mobc::Pool;
 use mobc_redis::RedisConnectionManager;
 use mobc_redis::redis::AsyncCommands;
+use uuid::Uuid;
 
 use crate::utils::{e500, derive_error_chain_fmt};
 use crate::routes::errors::{TeraError, RedisQueryError};
+use crate::routes::save_file::PENDING;
 
-// GET endpoint to download any file from redis.
-#[get("/load/{filename}")]
+
+// The name of a rendered file
+const FILE_NAME: &str = "backdrop.mp4";
+
+// GET endpoint to download any pending file from redis.
+#[get("/load/{fileProgressId}")]
 pub async fn load_file(
-    path: web::Path<String>,
     redis_pool: web::Data<Pool<RedisConnectionManager>>,
+    path: web::Path<Uuid>,
 ) -> Result<HttpResponse, LoadFileError> {
-    let file_name = path.into_inner();  // the file name might also be sent in a URL-encoded form
+    // Redis entry of `file_progress_id` indicates whether the
+    // file is ready for download.
+    let file_progress_id = path.into_inner().to_string();
 
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
-    let file_contents: String = conn.get(&file_name).await
+
+    // Check if the video is done rendering.
+    let video_id = loop {
+        let done: String = conn.get(&file_progress_id).await
+            .map_err(|e| RedisQueryError(e))?;
+
+        if done.as_str() != PENDING {
+            break done;  // `done` now holds the ID of the finished video.
+        }
+    };
+
+    let data = conn.get(&video_id).await
         .map_err(|e| RedisQueryError(e))?;
 
     Ok(HttpResponse::Ok()
         .content_type(ContentType::plaintext())  // <-- Changed to `video/mp4 once the videos are ready.
-        .insert_header(ContentDisposition::attachment(file_name))
-        .body(file_contents))
+        .insert_header(ContentDisposition::attachment(FILE_NAME))
+        .body(data)
+    )
 }
 
-// Page to download available files from redis.
+// Page to download a rendered backdrop video.
+#[get("/load/{videoId}")]
 pub async fn load_file_page(
-    redis_pool: web::Data<Pool<RedisConnectionManager>>,
     tera: web::Data<Tera>,
+    path: web::Path<Uuid>,
 ) -> Result<HttpResponse, LoadFilePageError>  {
-    let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
-    let file_names: Vec<String> = conn.keys("*").await
-        .map_err(|e| RedisQueryError(e))?;
-
+    let video_id = path.into_inner().to_string();
+    
     let mut ctx = Context::new();
-    ctx.insert("download_endpoint", "/load");
-    ctx.insert("files", &file_names);
+    ctx.insert("download_endpoint", "/load");  // The endpoint to download from
+    ctx.insert("video_id", &video_id);  // ID of the video file to download
+    ctx.insert("filename", FILE_NAME);  // Name of the video file.
 
     let html = tera.render("file_load.html", &ctx)
         .map_err(|e| TeraError(e))?;
