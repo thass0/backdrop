@@ -2,7 +2,7 @@
 {% block title %}Download a file{% endblock title %}
 {% block content %}
   <h1>Download your backdrop video</h1>
-  <a href="{{download_endpoint}}/{{video_id}}" download="{{filename}}">
+  <a class="action-button" href="{{download_endpoint}}/{{video_id}}" download="{{filename}}">
     {{filename}}
   </a>
 {% endblock content %}

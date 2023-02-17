@@ -6,7 +6,7 @@
 /* file upload styles from https://nikitahl.com/custom-styled-input-type-file (modified) */
 input[type=file] {
   width: 350px;
-  max-width: 100%
+  max-width: 100%;
   color: var(--dark);
   padding: 5px;
   background: var(--white);
@@ -18,7 +18,7 @@ input[type=file]::file-selector-button {
   border: none;
   background: var(--accent);
   padding: 10px 20px;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--white);
   cursor: pointer;
   transition:  background .2s ease-in-out;
@@ -57,23 +57,6 @@ input[type=file]::file-selector-button:hover {
 label + label {
   margin-top: 23px;
 }
-
-.submit {
-  padding: 10px 30px;
-  font-size: 24px;
-  cursor: pointer;
-  border-radius: 10px;
-  background-color: var(--accent);
-  color: var(--white);
-
-  transition: all 0.3s;
-}
-
-.submit:hover {
-  border-radius: 0px;
-  background-color: var(--dark);
-}
-
 </style>
 {% endblock style %}
 {% block content %}
@@ -89,6 +72,6 @@ label + label {
       or
       <input type="file" name="source-audio" id="source-audio" accept="audio/*" required/>
     </label>
-    <button type="submit" style="margin-top: 24px;" class="submit">Submit</button>
+    <button type="submit" style="margin-top: 24px;" class="action-button">Submit</button>
   </form>
 {% endblock content %}

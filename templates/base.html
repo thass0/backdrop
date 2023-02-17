@@ -33,8 +33,25 @@
     width: 100%;
     text-align: center;
     padding: 20px;
-    background-color: var(--dark);
+    background-color: var(--accent);
     color: white;
+  }
+
+  /* Global action button class */
+  .action-button {
+    border: none;
+    padding: 10px 30px;
+    font-size: 24px;
+    cursor: pointer;
+    border-radius: 11px;
+    background-color: var(--accent);
+    color: var(--white);
+
+    transition: all 0.3s;
+  }
+  .action-button:hover {
+    border-radius: 0px;
+    background-color: var(--dark);
   }
   </style>
   {% endblock style %}
