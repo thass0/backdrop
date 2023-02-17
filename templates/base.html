@@ -4,27 +4,40 @@
   {% block head %}
   <title>{%  block title %}{%endblock title %}</title>
   {% endblock head %}
+  {% block style %}
   <style>
+  :root {
+    --dark: #082d0f;
+    --grey: #5e807f;
+    --accent: #49997b;
+    --light: #9dc5bb;
+    --base: #dee5e5;
+    --white: #f5f7f7;
+  }
   html, body {
+    max-width: 70ch;
+    padding: 3em 1em;
+    margin: auto;
+    line-height: 1.75;
+    font-size: 1.1em;
     height: 100%;
-  }
-  body {
-    display: flex;
-    flex-direction: column;
-    background-color: #f5f6f1;
     font-family: sans serif;
-  }
-  .content {
-    flex: 1 0 auto;
-    padding: 20px;
+    text-align: center;
+    background-color: var(--base);
+    color: var(--dark);
   }
   .footer {
-    border-radius: 5px;
-    flex-shrink: 0;
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
     padding: 20px;
-    background-color: #d3e687;
+    background-color: var(--dark);
+    color: white;
   }
   </style>
+  {% endblock style %}
 </head>
 <body>
   <div class="content" id="content">
