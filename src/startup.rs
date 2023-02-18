@@ -64,13 +64,10 @@ pub async fn run(
         App::new()
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(routes::health_check))
-            .service(
-                web::resource("/")
-                .route(web::get().to(routes::save_file_page))
-                .route(web::post().to(routes::save_file))
-            )
-            .service(routes::load_file_page)
-            .service(routes::load_file)  // GET service for any file name
+            .route("/", web::get().to(routes::save_file_page))
+            .route("/save", web::post().to(routes::save_file))
+            .service(routes::load_file_page)  // Page to download any file
+            .service(routes::load_file)  // GET any file by ID
             .app_data(redis_pool.clone())
             .app_data(tera.clone())
     })
