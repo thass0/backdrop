@@ -4,13 +4,12 @@ use actix_web::http::header::LOCATION;
 use actix_multipart::{Multipart, Field};
 use futures_util::TryStreamExt as _;
 use uuid::Uuid;
-use mobc::Pool;
-use mobc_redis::RedisConnectionManager;
 use mobc_redis::redis::AsyncCommands;
 use serde::{Serialize, Deserialize};
 
 use crate::utils::{derive_error_chain_fmt, e500};
 use crate::routes::errors::RedisQueryError;
+use crate::{RedisPool, RedisConn, PENDING, RENDER_QUEUE_KEY};
 
 /*
 TODO
@@ -26,16 +25,9 @@ Finish the journey to a finish video.
 - the rendering worker sets the pending ID to the finished video when its done.
 */
 
-// Content of entries which are still unfinished.
-pub const PENDING: &str = "pending";
-// Redis key for the render queue
-pub const RENDER_QUEUE_KEY: &str = "render-worker-queue";
-
-type Conn = mobc::Connection<RedisConnectionManager>;
-
 // POST endpoint to upload any file to redis.
 pub async fn save_file(
-    redis_pool: web::Data<Pool<RedisConnectionManager>>,
+    redis_pool: web::Data<RedisPool>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, SaveFileError> {
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
@@ -90,7 +82,7 @@ pub struct RenderTaskBuilder {
 
 impl RenderTaskBuilder {
     // Create new instance with target_id entry in redis.
-    async fn new(conn: &mut Conn) -> Result<Self, SaveFileError> {
+    async fn new(conn: &mut RedisConn) -> Result<Self, SaveFileError> {
         // Key of the redis entry to later store the finished video.
         let target_id = Uuid::new_v4();
         conn.set(target_id.to_string(), PENDING).await
@@ -157,7 +149,8 @@ impl RenderTaskBuilder {
     }
 }
 
-// Render task for the render worker to process.
+// Render task used by the render worker to create a
+// video form an audio and an image file.
 #[derive(Serialize, Deserialize)]
 pub struct RenderTask {
     target: Uuid,
@@ -167,13 +160,14 @@ pub struct RenderTask {
 
 impl RenderTask {
     // Add `self` to the render task queue.
-    async fn queue(self, conn: &mut Conn) -> Result<String, SaveFileError> {
+    pub async fn queue(self, conn: &mut RedisConn) -> Result<String, SaveFileError> {
         let ser = serde_json::to_string(&self).map_err(|e| e500(e))?;
         conn.lpush(RENDER_QUEUE_KEY, ser).await
             .map_err(|e| RedisQueryError(e))?;
         Ok(self.target.to_string())
     }
 }
+
 
 // Internal errors raised when calling the `save_file` endpoint.
 #[derive(thiserror::Error)]

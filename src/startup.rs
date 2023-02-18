@@ -8,6 +8,7 @@ use secrecy::{Secret, ExposeSecret};
 use mobc::Pool;
 use mobc_redis::{redis::{self,  RedisResult}, RedisConnectionManager};
 use tera::Tera;
+use crate::RedisPool;
 
 pub struct Application {
     port: u16,
@@ -45,9 +46,9 @@ impl Application {
     }
 }
 
-async fn get_redis_pool(
+pub async fn get_redis_pool(
     redis_uri: Secret<String>,
-) -> RedisResult<Pool<RedisConnectionManager>> {
+) -> RedisResult<RedisPool> {
     let client = redis::Client::open(redis_uri.expose_secret().as_ref())?;
     let manager = RedisConnectionManager::new(client);
     Ok(Pool::builder().max_open(100).build(manager))
@@ -55,7 +56,7 @@ async fn get_redis_pool(
 
 pub async fn run(
     listener: TcpListener,
-    redis_pool: Pool<RedisConnectionManager>,
+    redis_pool: RedisPool,
     tera: Tera,
 ) -> Result<Server, anyhow::Error> {
     let redis_pool = web::Data::new(redis_pool);

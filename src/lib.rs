@@ -4,3 +4,12 @@ pub mod routes;
 pub mod utils;
 pub mod configuration;
 pub mod render_worker;
+
+pub type RedisPool = mobc::Pool<mobc_redis::RedisConnectionManager>;
+pub type RedisConn = mobc::Connection<mobc_redis::RedisConnectionManager>;
+
+// Content of entries which are still unfinished.
+pub const PENDING: &str = "pending";
+// Redis key for the render queue
+pub const RENDER_QUEUE_KEY: &str = "render-worker-queue";
+

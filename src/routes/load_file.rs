@@ -2,14 +2,12 @@ use actix_web::{web, get, HttpResponse, ResponseError};
 use actix_web::http::StatusCode;
 use actix_web::http::header::{ContentDisposition, ContentType};
 use tera::{Tera, Context};
-use mobc::Pool;
-use mobc_redis::RedisConnectionManager;
 use mobc_redis::redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::utils::{e500, derive_error_chain_fmt};
 use crate::routes::errors::{TeraError, RedisQueryError};
-use crate::routes::save_file::PENDING;
+use crate::{RedisPool, PENDING};
 
 
 // The name of a rendered file
@@ -18,7 +16,7 @@ const FILE_NAME: &str = "backdrop.mp4";
 // GET endpoint to download any pending file from redis.
 #[get("/load/{fileProgressId}")]
 pub async fn load_file(
-    redis_pool: web::Data<Pool<RedisConnectionManager>>,
+    redis_pool: web::Data<RedisPool>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, LoadFileError> {
     // Redis entry of `file_progress_id` indicates whether the
