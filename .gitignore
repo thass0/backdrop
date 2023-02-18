@@ -1,6 +1,4 @@
 target/
 Cargo.lock
-# configuration/local.yaml
-# .env
-# spec.yaml
-tmp/
+configuration/local.yaml
+spec.yaml

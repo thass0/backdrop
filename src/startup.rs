@@ -65,7 +65,7 @@ pub async fn run(
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(routes::health_check))
             .service(
-                web::resource("/save")
+                web::resource("/")
                 .route(web::get().to(routes::save_file_page))
                 .route(web::post().to(routes::save_file))
             )
