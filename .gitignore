@@ -2,3 +2,6 @@ target/
 Cargo.lock
 configuration/local.yaml
 spec.yaml
+*.mp4
+*.mp3
+*.jpg

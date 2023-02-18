@@ -64,10 +64,11 @@ pub async fn save_file(
 }
 
 // Helper using in `save_file` to stream a field.
-async fn receive_field<'a>(mut field: Field) -> Result<String, SaveFileError> {
-    let mut buf = String::new();
+async fn receive_field<'a>(mut field: Field) -> Result<Vec<u8>, SaveFileError> {
+    use std::io::Write;
+    let mut buf: Vec<u8> = Vec::with_capacity(1<<19);  // ~500kB
     while let Some(chunk) = field.try_next().await? {
-        buf.push_str(&String::from_utf8_lossy(&chunk));
+        buf.write_all(&chunk).map_err(|e| e500(e))?;
     }
     Ok(buf)
 }
@@ -151,11 +152,11 @@ impl RenderTaskBuilder {
 
 // Render task used by the render worker to create a
 // video form an audio and an image file.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RenderTask {
-    target: Uuid,
-    audio: Uuid,
-    image: Uuid,
+    pub target: Uuid,
+    pub audio: Uuid,
+    pub image: Uuid,
 }
 
 impl RenderTask {
