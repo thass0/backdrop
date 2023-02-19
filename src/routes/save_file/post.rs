@@ -11,19 +11,6 @@ use crate::utils::{derive_error_chain_fmt, e500};
 use crate::routes::errors::RedisQueryError;
 use crate::{RedisPool, RedisConn, PENDING, RENDER_QUEUE_KEY};
 
-/*
-TODO
-Finish the journey to a finish video.
-- `save` endpoint starts rendering worker. It receives:
-    1. the ID of an image
-    2. the ID of an audio
-    3. the ID of the `pending` indicator
-
-- `load_file_page` received the `pending` ID when `save` exits 
-- `load_file` uses the pending ID to provide the video.
-
-- the rendering worker sets the pending ID to the finished video when its done.
-*/
 
 // POST endpoint to upload any file to redis.
 pub async fn save_file(
@@ -48,13 +35,6 @@ pub async fn save_file(
     let queued_target_id = render_task
         .build()?
         .queue(&mut conn).await?;
-    /*
-    TODO
-    - redis list which holds all pending `target_file_id`s for the worker
-    - asynchronous worker thread rendering videos
-
-    - flash messages
-    */
 
     let redirect_url = format!("/done/{queued_target_id}");
     Ok(HttpResponse::SeeOther()

@@ -1,9 +1,9 @@
 use std::time::Duration;
 use anyhow::Context;
 use mobc_redis::redis::AsyncCommands;
-use std::process::{Command, Stdio};
-use std::fs;
-use std::io::Read;
+use std::process::Command;
+use tokio::io::AsyncWriteExt;
+use tokio::fs::File;
 use uuid::Uuid;
 
 use crate::configuration::Settings;
@@ -12,8 +12,12 @@ use crate::{RedisPool, RENDER_QUEUE_KEY};
 use crate::routes::RenderTask;
 use crate::utils::spawn_blocking_with_tracing;
 
+const ASSETS_DIR: &str = "tmp_assets";
+
 pub async fn run_until_stopped(configuration: Settings) -> anyhow::Result<()> {
     let redis_pool = get_redis_pool(configuration.redis_uri).await?;
+    tokio::fs::create_dir_all(ASSETS_DIR).await?;
+    tracing::info!("Set up render worker; Now entering working loop.");
     worker_loop(redis_pool).await
 }
 
@@ -39,10 +43,6 @@ enum ExecutionOutcome {
     TaskCompleted,
 }
 
-const AUDIO_FILE: &str = "audio.mp3";
-const IMAGE_FILE: &str = "image.jpg";
-const VIDEO_FILE: &str = "video.mp4";
-
 async fn try_render_task(
     redis_pool: &RedisPool,
 ) -> anyhow::Result<ExecutionOutcome> {
@@ -62,89 +62,86 @@ async fn try_render_task(
 
     tracing::trace!("Received render task: {task:?}");
 
-    // TODO: Remove copying data between redis and files.
+    // Both the audio and the image data need to be copied to
+    // a file so ffmpeg can ready them.
+    // The workaround to avoid copying could be to only ever store them in a file.
+    // This has the drawback that assets become local to a single container.
+    // Maybe docker volumes could be used but redis seems file for now ...
 
+    // Buffer audio data in file.
     let audio_data: Vec<u8> = conn.get(task.audio.to_string()).await
         .context("failed to query audio data")?;
-    // For some reason ffprobe does not  accept the data when
-    // it's piped. Therefore it's written to a file first.
-    fs::write(AUDIO_FILE, &audio_data)
-        .context("failed to write audio")?;    
+    let audio_file_name = format!("{ASSETS_DIR}/{}.mp3", task.audio);
+    File::create(&audio_file_name).await
+        .context("failed to create audio file")?
+        .write_all(&audio_data).await
+        .context("failed to write audio")?;
 
+    // Buffer image  data in file.
     let image_data: Vec<u8> = conn.get(task.image.to_string()).await
         .context("failed to query image data")?;
-    fs::write(IMAGE_FILE, &image_data)
+    let image_file_name = format!("{ASSETS_DIR}/{}.jpg", task.image);
+    File::create(&image_file_name).await
+        .context("failed to create image file")?
+        .write_all(&image_data).await
         .context("failed to write image")?;
 
-    tracing::trace!("Starting rendering");
-
-    let audio_len = audio_len().await?;
-    tracing::trace!("audio length: {audio_len}");
-    render_video(audio_len).await?;
-
-    // Write the finished video to the target ID's location.
-    let mut video_file = tokio::task::spawn_blocking(move || {
-        fs::File::open(VIDEO_FILE)
-    })
-    .await?
-    .context("failed to reopen video file")?;
-
+    // Render the video
+    tracing::trace!("Starting rendering {0}", task.target);
+    let video_data = render_video(
+        image_file_name.clone(),  // render_video has to own file names to spawn new thread.
+        audio_file_name.clone(),
+    ).await?;
     tracing::info!("Finished rendering {0}", task.target);
     
-    // Allocate 1MB;
-    let mut video_data: Vec<u8> = Vec::with_capacity(1<<20); 
-    video_file.read_to_end(&mut video_data)
-        .context("failed to read video file")?;
-
+    // Store finished video in redis.
     let video_id = Uuid::new_v4().to_string();
     conn.set(&video_id, &video_data).await
         .context("failed to set video data in db")?;
+    // Store key of video in target.
     conn.set(&task.target.to_string(), &video_id).await
         .context("failed to set video target id")?;
 
-    tracing::trace!("Set to not pending");
+    tracing::trace!("Successfully updated video in redis {0}", task.target);
+
+    // Remove file buffers.
+    tokio::fs::remove_file(image_file_name).await
+        .context("failed to remove image file")?;
+    tokio::fs::remove_file(audio_file_name).await
+        .context("failed to remove audio file")?;
 
     Ok(ExecutionOutcome::TaskCompleted)
 }
 
-async fn audio_len() -> anyhow::Result<String> {
-    let output = spawn_blocking_with_tracing(move || {
-        // Get the length of the input audio file.
-        Command::new("ffprobe")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .arg("-show_entries")
-            .arg("format=duration")
-            .arg("-of")
-            .arg("default=noprint_wrappers=1:nokey=1")
-            .arg(AUDIO_FILE)
-            .output()
-    })
-    .await?
-    .context("failed to spawn audio length process")?;
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-async fn render_video(audio_len: String) -> anyhow::Result<()> {
+// Render the video using the given files a assets.
+// This function will also delete the files again.
+async fn render_video(
+    image_file_name: String,
+    audio_file_name: String,
+) -> anyhow::Result<Vec<u8>> {
     let output = spawn_blocking_with_tracing(move || {
         // Create a video from the assets.
         Command::new("ffmpeg")
-            .arg("-r").arg("1").arg("-loop").arg("1")
-            .arg("-i").arg(IMAGE_FILE)
-            .arg("-i").arg(AUDIO_FILE)
-            .arg("-acodec").arg("copy")
-            .arg("-vcodec").arg("libx264")
-            .arg("-tune").arg("stillimage")
-            .arg("-preset").arg("ultrafast")
-            .arg("-ss").arg("0").arg("-t").arg(audio_len.trim())
-            .arg(VIDEO_FILE).arg("-y")
+            // Loop the  image with a tiny frame rate (1FPS)
+            .args(["-r", "1", "-loop", "1"])
+            // Use the given image and audio files as inputs.
+            .args(["-i", &image_file_name, "-i", &audio_file_name])
+            // Stop the video when the audio stops.
+            .args(["-shortest", "-fflags", "shortest", "-max_interleave_delta", "100M"])
+            // Enable piped MP4.
+            .args(["-movflags", "frag_keyframe+empty_moov"])
+            // Copy audio codec and use libx264 for video.
+            .args(["-acodec", "copy", "-vcodec", "libx264"])
+            // More rendering speedups for still image videos
+            .args(["-tune", "stillimage", "-preset", "ultrafast"])
+            // Save result encoded as MP4 to stdout.
+            .args(["-f", "mp4", "-"])
             .output()
     })
     .await?  // bubble up `JoinError`s
     .context("failed to spawn video rendering process")?;
 
-    tracing::info!("render stdout: {0}", String::from_utf8_lossy(&output.stdout));
-    tracing::info!("render stderr: {0}", String::from_utf8_lossy(&output.stderr));
-    Ok(())
+    tracing::trace!("render stderr: {0}", String::from_utf8_lossy(&output.stderr));
+
+    Ok(output.stdout)
 }

@@ -33,6 +33,8 @@ pub async fn load_file(
     )
 }
 
+// TODO: Error propagation if rendering fails.
+
 // Page to download a rendered backdrop video.
 #[get("/done/{videoId}")]
 pub async fn load_file_page(

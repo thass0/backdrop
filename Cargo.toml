@@ -12,7 +12,7 @@ name = "backdrop"
 
 [dependencies]
 actix-web = "4"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs"] }
 serde = { version = "1", features = ["derive"] }
 serde-aux = "3"
 config = "0.13"
