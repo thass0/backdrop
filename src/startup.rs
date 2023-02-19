@@ -8,7 +8,9 @@ use secrecy::{Secret, ExposeSecret};
 use mobc::Pool;
 use mobc_redis::{redis::{self,  RedisResult}, RedisConnectionManager};
 use tera::Tera;
+
 use crate::RedisPool;
+use crate::content_length_limit::ContentLengthLimit;
 
 pub struct Application {
     port: u16,
@@ -64,6 +66,7 @@ pub async fn run(
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
+            .wrap(ContentLengthLimit::default())
             .route("/health_check", web::get().to(routes::health_check))
             .route("/", web::get().to(routes::save_file_page))
             .route("/save", web::post().to(routes::save_file))

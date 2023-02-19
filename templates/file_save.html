@@ -65,13 +65,46 @@ label + label {
     <label for="source-image" class="drop-container">
       <span class="drop-title">Drop your image here</span>
       or
-      <input type="file" name="source-image" id="source-image" accept="image/*" required />
+      <input type="file" name="source-image" id="source-image" accept="image/jpeg" required />
     </label>
     <label for="source-audio" class="drop-container">
       <span class="drop-title">Drop your music here</span>
       or
-      <input type="file" name="source-audio" id="source-audio" accept="audio/*" required/>
+      <input type="file" name="source-audio" id="source-audio" accept="audio/mpeg" required/>
     </label>
-    <button type="submit" style="margin-top: 24px;" class="action-button">Submit</button>
+    <button type="submit" onclick="return verifyUploadSizeIsOk()" style="margin-top: 24px;" class="action-button">
+      Submit
+    </button>
+    <script type="text/javascript">
+      function verifyUploadSizeIsOk() {
+        // Check the user is not trying to upload files which are above
+        // the server-side size limit.
+        const max_image_size = 1 << 20;  // 1MB
+        const max_audio_size = 4 << 20;  // 4MB
+        // Check image size.
+        const image_file = document.getElementById("source-image");
+        if (
+          image_file.files
+          && image_file.files.length == 1
+          && image_file.files[0].size >= max_image_size
+        ) {
+          alert("Image files must be smaller than " + parseInt(max_image_size/1024/1024) + "MB");
+          return false;
+        }
+        // Check audio size.
+        const audio_file = document.getElementById("source-audio");
+        if (
+          audio_file.files
+          && audio_file.files.length == 1
+          && audio_file.files[0].size >= max_audio_size
+        ) {
+          alert("Audio files must be smaller than " + parseInt(max_audio_size/1024/1024) + "MB");
+          return false;
+        }
+
+        // Allow form submission if both checks were passed.
+        return true;
+      }
+    </script>
   </form>
 {% endblock content %}

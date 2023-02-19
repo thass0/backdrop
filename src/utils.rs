@@ -33,6 +33,13 @@ where
     actix_web::error::ErrorInternalServerError(e)
 }
 
+pub fn e400<T>(e: T) -> actix_web::Error
+where
+    T: std::fmt::Debug + std::fmt::Display + 'static
+{
+    actix_web::error::ErrorBadRequest(e)
+}
+
 /// Spawn a blocking task in a new thread without switching the active tracing span.
 pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
 where
