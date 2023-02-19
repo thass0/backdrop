@@ -2,8 +2,41 @@
 {% block title %}Backdrop Download{% endblock title %}
 {% block content %}
   <h1>Download your backdrop video</h1>
-  <a class="action-button" href="{{download_endpoint}}/{{video_id}}" download="{{filename}}">
-    {{filename}}
-  </a>
+  <form id="download-form" method="get">  <!-- the action is set once the file is ready.-->
+    <button id="download-button" type="submit">{{filename}}</button>
+  </form>
+  <script>
+    const button = document.getElementById("download-button");
+    button.disabled = true;
+
+    async function fetchReady() {
+      // Fetch the state of the rendered file.
+      let response = await fetch('ready/{{file_id}}');
+      let data = await response.json();
+      return data;
+    }
+
+    async function waitForReady() {
+      let received = '';
+      do {
+        fetchReady()
+          .then(data => {
+            console.log(data);
+            received = data;
+          })
+          .catch(reason => console.log(reason.message));
+
+        await new Promise(r => setTimeout(r, 3000));
+      } while (received === '{{pending_msg}}');
+        const form = document.getElementById('download-form');
+        form.action = '/load'.concat('/', received);
+        button.disabled = false;
+    }
+
+    waitForReady();
+    
+    // TODO: Style the button
+  </script>
 {% endblock content %}
   
+

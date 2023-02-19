@@ -4,6 +4,7 @@ use mobc_redis::redis::AsyncCommands;
 use std::process::{Command, Stdio};
 use std::fs;
 use std::io::Read;
+use uuid::Uuid;
 
 use crate::configuration::Settings;
 use crate::startup::get_redis_pool;
@@ -75,7 +76,10 @@ async fn try_render_task(
     fs::write(IMAGE_FILE, &image_data)
         .context("failed to write image")?;
 
+    tracing::info!("Starting rendering");
+
     let audio_len = audio_len().await?;
+    tracing::warn!("audio length: {audio_len}");
     render_video(audio_len).await?;
 
     // Write the finished video to the target ID's location.
@@ -84,13 +88,21 @@ async fn try_render_task(
     })
     .await?
     .context("failed to reopen video file")?;
+
+    tracing::info!("Finished rendering");
+    
     // Allocate 1MB;
     let mut video_data: Vec<u8> = Vec::with_capacity(1<<20); 
     video_file.read_to_end(&mut video_data)
         .context("failed to read video file")?;
 
-    conn.set(task.target.to_string(), &video_data).await
+    let video_id = Uuid::new_v4().to_string();
+    conn.set(&video_id, &video_data).await
         .context("failed to set video data in db")?;
+    conn.set(&task.target.to_string(), &video_id).await
+        .context("failed to set video target id")?;
+
+    tracing::info!("Set to not pending");
 
     Ok(ExecutionOutcome::TaskCompleted)
 }
@@ -128,12 +140,11 @@ async fn render_video(audio_len: String) -> anyhow::Result<()> {
             .arg("-ss").arg("0").arg("-t").arg(audio_len.trim())
             .arg(VIDEO_FILE).arg("-y")
             .output()
-            
     })
     .await?  // bubble up `JoinError`s
     .context("failed to spawn video rendering process")?;
 
-    tracing::trace!("render stdout: {0}", String::from_utf8_lossy(&output.stdout));
-    tracing::trace!("render stderr: {0}", String::from_utf8_lossy(&output.stderr));
+    tracing::info!("render stdout: {0}", String::from_utf8_lossy(&output.stdout));
+    tracing::info!("render stderr: {0}", String::from_utf8_lossy(&output.stderr));
     Ok(())
 }

@@ -56,7 +56,7 @@ pub async fn save_file(
     - flash messages
     */
 
-    let redirect_url = format!("/load/{queued_target_id}");
+    let redirect_url = format!("/done/{queued_target_id}");
     Ok(HttpResponse::SeeOther()
         .insert_header((LOCATION, redirect_url))
         .finish()

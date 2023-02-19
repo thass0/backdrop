@@ -69,6 +69,7 @@ pub async fn run(
             .route("/save", web::post().to(routes::save_file))
             .service(routes::load_file_page)  // Page to download any file
             .service(routes::load_file)  // GET any file by ID
+            .service(routes::check_resource_state)  // Check if a file is ready
             .app_data(redis_pool.clone())
             .app_data(tera.clone())
     })
