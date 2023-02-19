@@ -1,4 +1,4 @@
-use mobc_redis::redis::{self, aio::Connection, AsyncCommands}; 
+use redis::{aio::Connection, AsyncCommands};
 use crate::helper::get_redis_pool;
 
 

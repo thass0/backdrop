@@ -1,6 +1,6 @@
 use std::time::Duration;
 use anyhow::Context;
-use mobc_redis::redis::AsyncCommands;
+use redis::AsyncCommands;
 use std::process::Command;
 use tokio::io::AsyncWriteExt;
 use tokio::fs::File;

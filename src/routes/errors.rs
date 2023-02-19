@@ -41,6 +41,6 @@ internal_error_wrapper!(TeraError, tera::Error, "Failed to render requested page
 // Wrapper around `RedisError` used for failed redis querys.
 internal_error_wrapper!(
     RedisQueryError,
-    mobc_redis::redis::RedisError,
+    redis::RedisError,
     "Database query error"
 );

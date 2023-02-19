@@ -2,7 +2,7 @@ use actix_web::{web, get, HttpResponse, ResponseError};
 use actix_web::http::StatusCode;
 use actix_web::http::header::{ContentDisposition, CONTENT_TYPE};
 use tera::{Tera, Context};
-use mobc_redis::redis::AsyncCommands;
+use redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::utils::{e500, derive_error_chain_fmt};

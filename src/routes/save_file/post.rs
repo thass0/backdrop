@@ -4,7 +4,7 @@ use actix_web::http::header::LOCATION;
 use actix_multipart::{Multipart, Field};
 use futures_util::TryStreamExt as _;
 use uuid::Uuid;
-use mobc_redis::redis::AsyncCommands;
+use redis::AsyncCommands;
 use serde::{Serialize, Deserialize};
 
 use crate::utils::{derive_error_chain_fmt, e500};
@@ -22,9 +22,9 @@ pub async fn save_file(
 
     // Store each file in the stream in redis.
     while let Some(field) = payload.try_next().await? {
-        // Create and save a storage ID for the new file.
-        // `render_task.set` checks that we receive the correct amount of files.
-        let file_id = render_task.set(field.content_type())?;
+        // Create and save a storage ID for the new file. `render_task.set_key` raises
+        // an error if a file of any type (audio or video) are received more than once.
+        let file_id = render_task.set_key(field.content_type())?;
         
         // Receive and store the file.
         let data = receive_field(field).await?;
@@ -77,7 +77,7 @@ impl RenderTaskBuilder {
     }
 
     // Set the redis entry ID for a received file.
-    fn set(&mut self, mime_opt: Option<&mime::Mime>) -> Result<Uuid, SaveFileError> {
+    fn set_key(&mut self, mime_opt: Option<&mime::Mime>) -> Result<Uuid, SaveFileError> {
         let mime_type = match mime_opt {
             Some(mt) => mt,
             None => return Err(SaveFileError::MissingMime),

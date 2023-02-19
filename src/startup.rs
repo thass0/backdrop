@@ -6,7 +6,8 @@ use crate::routes;
 use crate::configuration::Settings;
 use secrecy::{Secret, ExposeSecret};
 use mobc::Pool;
-use mobc_redis::{redis::{self,  RedisResult}, RedisConnectionManager};
+use mobc_redis::RedisConnectionManager;
+use redis::RedisResult;
 use tera::Tera;
 
 use crate::RedisPool;
