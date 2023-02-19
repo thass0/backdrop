@@ -25,6 +25,7 @@ RUN apt-get update -y \
 
 COPY --from=builder /app/target/release/backdrop backdrop
 COPY configuration configuration
+COPY templates templates
 
 ENV APP_ENVIRONMENT production
 ENTRYPOINT ["./backdrop"]
