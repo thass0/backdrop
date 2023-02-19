@@ -1,9 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Backdrop Download{% endblock title %}
+{% block style %}
+{{ super() }}
+<style>
+.button_text {
+  transition: all 0.2s;
+}
+.action-button--loading .button_text {
+  visibility: hidden;
+  opacity: 0;
+}
+.action-button--loading::after {
+  content: "";
+  position: absolute;
+  width: 27px;
+  height: 27px;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  border: 4px solid transparent;
+  border-top-color: var(--white);
+  border-radius: 50%;
+  animation: button-loading-spinner 1s ease infinite;
+}
+@keyframes button-loading-spinner {
+    from {
+        transform: rotate(0turn);
+    }
+
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+</style>
+{% endblock style %}
 {% block content %}
   <h1>Download your backdrop video</h1>
   <form id="download-form" method="get">  <!-- the action is set once the file is ready.-->
-    <button id="download-button" type="submit">{{filename}}</button>
+    <button id="download-button" class="action-button action-button--loading" type="submit">
+      <span class="button_text">{{filename}}</span>
+    </button>
   </form>
   <script>
     const button = document.getElementById("download-button");
@@ -30,12 +69,10 @@
       } while (received === '{{pending_msg}}');
         const form = document.getElementById('download-form');
         form.action = '/load'.concat('/', received);
+        button.classList.remove('action-button--loading');
         button.disabled = false;
     }
-
     waitForReady();
-    
-    // TODO: Style the button
   </script>
 {% endblock content %}
   

@@ -46,12 +46,16 @@
     border-radius: 11px;
     background-color: var(--accent);
     color: var(--white);
-
+    position: relative;
     transition: all 0.3s;
   }
   .action-button:hover {
     border-radius: 0px;
     background-color: var(--dark);
+  }
+  .action-button:disabled {
+    border-radius: 11px;  /* Disable changing corners on hover */
+    background-color: var(--light);
   }
   </style>
   {% endblock style %}

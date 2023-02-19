@@ -76,10 +76,10 @@ async fn try_render_task(
     fs::write(IMAGE_FILE, &image_data)
         .context("failed to write image")?;
 
-    tracing::info!("Starting rendering");
+    tracing::trace!("Starting rendering");
 
     let audio_len = audio_len().await?;
-    tracing::warn!("audio length: {audio_len}");
+    tracing::trace!("audio length: {audio_len}");
     render_video(audio_len).await?;
 
     // Write the finished video to the target ID's location.
@@ -89,7 +89,7 @@ async fn try_render_task(
     .await?
     .context("failed to reopen video file")?;
 
-    tracing::info!("Finished rendering");
+    tracing::info!("Finished rendering {0}", task.target);
     
     // Allocate 1MB;
     let mut video_data: Vec<u8> = Vec::with_capacity(1<<20); 
@@ -102,7 +102,7 @@ async fn try_render_task(
     conn.set(&task.target.to_string(), &video_id).await
         .context("failed to set video target id")?;
 
-    tracing::info!("Set to not pending");
+    tracing::trace!("Set to not pending");
 
     Ok(ExecutionOutcome::TaskCompleted)
 }
