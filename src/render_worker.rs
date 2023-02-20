@@ -68,6 +68,9 @@ async fn try_render_task(
     // This has the drawback that assets become local to a single container.
     // Maybe docker volumes could be used but redis seems file for now ...
 
+    // TODO: Delete video and audio after SUCCESSFUL use
+    // TODO: Append task back to the queue on error
+
     // Buffer audio data in file.
     let audio_data: Vec<u8> = conn.get(task.audio.to_string()).await
         .context("failed to query audio data")?;

@@ -18,6 +18,13 @@ pub async fn save_file(
     mut payload: Multipart,
 ) -> Result<HttpResponse, SaveFileError> {
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
+
+    // TODO: Implement a mechanism to delete unused resources from redis.
+    // - transactions?
+    // - an expiration which only lets each task last a short time?
+    //     This would cut lots of logic handling expiration. It could
+    //     also be combined with the render worker to just discard failed tasks.
+
     let mut render_task = RenderTaskBuilder::new(&mut conn).await?;
 
     // Store each file in the stream in redis.
@@ -63,7 +70,7 @@ pub struct RenderTaskBuilder {
 
 impl RenderTaskBuilder {
     // Create new instance with target_id entry in redis.
-    async fn new(conn: &mut RedisConn) -> Result<Self, SaveFileError> {
+    async fn new(conn: &mut RedisConn) -> Result<Self, RedisQueryError> {
         // Key of the redis entry to later store the finished video.
         let target_id = Uuid::new_v4();
         conn.set(target_id.to_string(), PENDING).await
