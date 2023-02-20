@@ -35,7 +35,7 @@ where
 impl Default for ContentLengthLimit {
     fn default() -> Self {
         Self {
-            limit: 5 << 20, // Default limit at 5MB.
+            limit: 4 << 20, // Default limit at 4MB.
         }
     }
 }

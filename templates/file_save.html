@@ -79,30 +79,27 @@ label + label {
       function verifyUploadSizeIsOk() {
         // Check the user is not trying to upload files which are above
         // the server-side size limit.
-        const max_image_size = 1 << 20;  // 1MB
-        const max_audio_size = 4 << 20;  // 4MB
-        // Check image size.
+        const max_assets_size = 4 << 20;  // 4MB
+        let total_size = 0;
+        // Add image size to total.
         const image_file = document.getElementById("source-image");
-        if (
-          image_file.files
-          && image_file.files.length == 1
-          && image_file.files[0].size >= max_image_size
-        ) {
-          alert("Image files must be smaller than " + parseInt(max_image_size/1024/1024) + "MB");
-          return false;
+        if (image_file.files && image_file.files.length == 1) {
+          total_size += image_file.files[0].size
         }
-        // Check audio size.
+        // Add audio size to total.
         const audio_file = document.getElementById("source-audio");
-        if (
-          audio_file.files
-          && audio_file.files.length == 1
-          && audio_file.files[0].size >= max_audio_size
-        ) {
-          alert("Audio files must be smaller than " + parseInt(max_audio_size/1024/1024) + "MB");
+        if (audio_file.files && audio_file.files.length == 1) {
+          total_size += audio_file.files[0].size;
+        }
+
+        // Check size is below the limit.
+        if (total_size > max_assets_size) {
+          alert("The total size of your assets is too big.\n\
+The maximum asset size is " + parseInt(max_assets_size/1024/1024) + "MB.");
           return false;
         }
 
-        // Allow form submission if both checks were passed.
+        // Allow form submission if size check was passed.
         return true;
       }
     </script>
