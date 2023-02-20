@@ -5,44 +5,59 @@ use actix_multipart::{Multipart, Field};
 use futures_util::TryStreamExt as _;
 use uuid::Uuid;
 use redis::AsyncCommands;
+use std::ops::DerefMut;
 use serde::{Serialize, Deserialize};
 
 use crate::utils::{derive_error_chain_fmt, e500};
 use crate::routes::errors::RedisQueryError;
 use crate::{RedisPool, RedisConn, PENDING, RENDER_QUEUE_KEY};
 
+const REDIS_DISCARD: &str = "DISCARD";
 
 // POST endpoint to upload any file to redis.
 pub async fn save_file(
     redis_pool: web::Data<RedisPool>,
-    mut payload: Multipart,
+    payload: Multipart,
 ) -> Result<HttpResponse, SaveFileError> {
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
 
-    // TODO: Implement a mechanism to delete unused resources from redis.
-    // - transactions?
-    // - an expiration which only lets each task last a short time?
-    //     This would cut lots of logic handling expiration. It could
-    //     also be combined with the render worker to just discard failed tasks.
+    // Start redis transaction to save the assets.
+    redis::cmd("MULTI")
+        .query_async(conn.deref_mut()).await
+        .map_err(|e| RedisQueryError(e))?;
 
-    let mut render_task = RenderTaskBuilder::new(&mut conn).await?;
+    // Receive and store the assets in the multipart form.
+    let render_task = match RenderTask::build_from_form(
+        &mut conn,
+        payload,
+    ).await {
+        Ok(render_task) => render_task,
+        Err(e) => {
+            redis::cmd(REDIS_DISCARD)
+                .query_async(conn.deref_mut()).await
+                .map_err(|e| RedisQueryError(e))?;
+            return Err(e);
+        },
+    };
 
-    // Store each file in the stream in redis.
-    while let Some(field) = payload.try_next().await? {
-        // Create and save a storage ID for the new file. `render_task.set_key` raises
-        // an error if a file of any type (audio or video) are received more than once.
-        let file_id = render_task.set_key(field.content_type())?;
-        
-        // Receive and store the file.
-        let data = receive_field(field).await?;
-        conn.set(file_id.to_string(), data).await
-            .map_err(|e| RedisQueryError(e))?;
-    }
+    // Add a render task for the received assets to the render queue.
+    let queued_target_id = match render_task.queue(&mut conn).await {
+        Ok(queued_id) => queued_id,
+        Err(e) => {
+            redis::cmd(REDIS_DISCARD)
+                .query_async(conn.deref_mut()).await
+                .map_err(|e| RedisQueryError(e))?;
+            return Err(e);
+        },
+    };
 
-    let queued_target_id = render_task
-        .build()?
-        .queue(&mut conn).await?;
+    // Commit the assets and the task to redis now the request
+    // has been processed without any errors.
+    redis::cmd("EXEC")
+        .query_async(conn.deref_mut()).await
+        .map_err(|e| RedisQueryError(e))?;
 
+    // Redirect the caller to the download page for the queued video render.
     let redirect_url = format!("/done/{queued_target_id}");
     Ok(HttpResponse::SeeOther()
         .insert_header((LOCATION, redirect_url))
@@ -50,18 +65,59 @@ pub async fn save_file(
     )
 }
 
-// Helper using in `save_file` to stream a field.
-async fn receive_field<'a>(mut field: Field) -> Result<Vec<u8>, SaveFileError> {
-    use std::io::Write;
-    let mut buf: Vec<u8> = Vec::with_capacity(1<<19);  // ~500kB
-    while let Some(chunk) = field.try_next().await? {
-        buf.write_all(&chunk).map_err(|e| e500(e))?;
-    }
-    Ok(buf)
+// Render task used by the render worker to create a
+// video form an audio and an image file.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RenderTask {
+    pub target: Uuid,
+    pub audio: Uuid,
+    pub image: Uuid,
 }
 
-// Builder to construct a valid `RenderTask`.
-// If the build fails this builder will free all resources.
+impl RenderTask {
+    // Receive a multipart form and store it in redis.
+    // Create a new instance of self using the received assets.
+    async fn build_from_form(
+        conn: &mut RedisConn,
+        mut payload: Multipart,
+    ) -> Result<Self, SaveFileError> {
+        let mut builder = RenderTaskBuilder::new(conn).await?;
+
+        while let Some(field) = payload.try_next().await? {
+            // Check for a valid mime type in the current context before starting to receive.
+            // If the mime is valid the redis key to store the data is returned.
+            let asset_id = builder.validate_type(field.content_type())?;
+
+            // Receive and store the data in self.
+            let data = Self::receive_field(field).await?;
+            conn.set(asset_id.to_string(), data).await
+                .map_err(|e| RedisQueryError(e))?;
+        }
+
+        // Build asserts that all required assets are present
+        builder.build()
+    }
+
+    // Stream a single multipart form field and store it in a `Vec<u8>` buffer.
+    async fn receive_field(mut field: Field) -> Result<Vec<u8>, SaveFileError> {
+        use std::io::Write;
+        let mut buf: Vec<u8> = Vec::with_capacity(1<<19);  // 500kB buffer
+        while let Some(chunk) = field.try_next().await? {
+            buf.write_all(&chunk).map_err(|e| e500(e))?;
+        }
+        Ok(buf)
+    }
+
+    // Add `self` to the render worker task queue.
+    pub async fn queue(self, conn: &mut RedisConn) -> Result<String, SaveFileError> {
+        let ser = serde_json::to_string(&self).map_err(|e| e500(e))?;
+        conn.lpush(RENDER_QUEUE_KEY, ser).await
+            .map_err(|e| RedisQueryError(e))?;
+        Ok(self.target.to_string())
+    }
+}
+
+// Builder to help build a valid `RenderTask` instance.
 pub struct RenderTaskBuilder {
     target: Uuid, // redis key of target entry
     audio: Option<Uuid>,  // redis key of audio file
@@ -83,8 +139,15 @@ impl RenderTaskBuilder {
         })
     }
 
-    // Set the redis entry ID for a received file.
-    fn set_key(&mut self, mime_opt: Option<&mime::Mime>) -> Result<Uuid, SaveFileError> {
+    // Check the given mime type is valid in the current state of the
+    // task builder and return the type of the receiving assets.
+    // The uuid returned by this function is meant to be used as the key
+    // to the piece of data which is received along with the mime type
+    // passed to the function call.
+    fn validate_type(
+        &mut self,
+        mime_opt: Option<&mime::Mime>,
+    ) -> Result<Uuid, SaveFileError> {
         let mime_type = match mime_opt {
             Some(mt) => mt,
             None => return Err(SaveFileError::MissingMime),
@@ -105,7 +168,6 @@ impl RenderTaskBuilder {
             },
             mime::AUDIO => {
                 match self.audio {
-                    // TODO: Remove access files in this dtor
                     Some(_) => Err(SaveFileError::UnexpectedMime(
                         "received more than one audio".to_owned()
                     )),
@@ -122,7 +184,11 @@ impl RenderTaskBuilder {
             },
         }
     }
-
+    
+    // Create a `RenderTask` instance from the assets keys
+    // collected in self. This method will never fail if
+    // `validate_type` was called *twice* successfully before
+    // calling this method.
     fn build(self) -> Result<RenderTask, SaveFileError> {
         let audio_id = self.audio
             .ok_or(SaveFileError::MissingFile("audio"))?;
@@ -134,25 +200,6 @@ impl RenderTaskBuilder {
             audio: audio_id,
             image: image_id,
         })
-    }
-}
-
-// Render task used by the render worker to create a
-// video form an audio and an image file.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RenderTask {
-    pub target: Uuid,
-    pub audio: Uuid,
-    pub image: Uuid,
-}
-
-impl RenderTask {
-    // Add `self` to the render task queue.
-    pub async fn queue(self, conn: &mut RedisConn) -> Result<String, SaveFileError> {
-        let ser = serde_json::to_string(&self).map_err(|e| e500(e))?;
-        conn.lpush(RENDER_QUEUE_KEY, ser).await
-            .map_err(|e| RedisQueryError(e))?;
-        Ok(self.target.to_string())
     }
 }
 
