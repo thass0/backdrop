@@ -9,44 +9,61 @@ use crate::utils::{e500, derive_error_chain_fmt};
 use crate::routes::errors::{TeraError, RedisQueryError};
 use crate::{RedisPool, PENDING};
 
+/*
+Important: Currently all ID pointing to a finished video
+as well as the finished video are deleted from redis, after
+they were retrieved for the first time.
+This mean that each progress ID and video assets can only
+be used (retrieved) once.
+*/
 
 // The name of a rendered file
 const FILE_NAME: &str = "backdrop.mp4";
 
 // GET endpoint to download any pending file from redis.
-#[get("/load/{fileId}")]
+// The `GET /done/ready` endpoint will return a vaild key to the
+// video data for a given process ID, once a video is done rendering.
+// The finished video resource is deleted once this endpoind is called.
+#[get("/load/{videoKey}")]
 pub async fn load_file(
     redis_pool: web::Data<RedisPool>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, LoadFileError> {
-    let file_id = path.into_inner().to_string();
-
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
+    let video_key = path.into_inner().to_string();
 
-    let data: Vec<u8> = conn.get(&file_id).await
-        .map_err(|e| RedisQueryError(e))?;
+    let data: Vec<u8> = conn.get_del(&video_key).await
+        .map_err(|e| e500(e))?;  // opaque error to make it harder to use
+                                 // this endpoint for random queries.
+                                 // TODO: Add auth to this endpoint.    
 
     Ok(HttpResponse::Ok()
         .insert_header((CONTENT_TYPE, "video/mp4"))
         .insert_header(ContentDisposition::attachment(FILE_NAME))
-        .body(data)
-    )
+        .body(data))
 }
 
-// TODO: Error propagation if rendering fails.
+// TODO: Error propagation if rendering fails or if query fails.
 
 // Page to download a rendered backdrop video.
-#[get("/done/{videoId}")]
+// The handler sends the progress ID to the page frontend
+// so the page can check whether the video is ready or not dynamically.
+#[get("/done/{progressId}")]
 pub async fn load_file_page(
     tera: web::Data<Tera>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, LoadFilePageError>  {
-    let video_id = path.into_inner().to_string();
+    let progress_id = path.into_inner().to_string();
     
     let mut ctx = Context::new();
     // Endpoint to download form with the ID of the video file to download
-    ctx.insert("file_id", &video_id);
-    ctx.insert("filename", FILE_NAME);  // Name of the video file.
+    ctx.insert("progress_id", &progress_id);
+    // Name of the video file to download.
+    ctx.insert("filename", FILE_NAME);  
+    // `pending_msg` in the template is used to check whether the last value
+    // returned by the `GET /done/ready` endpoint inidcated that the video
+    // is done or not. In case the video is not ready, the endpoint will
+    // return the contents of `PENDING`, so `PENDING` has to be used for the check, too.
     ctx.insert("pending_msg", PENDING);
 
     let html = tera.render("file_load.html", &ctx)
@@ -54,18 +71,27 @@ pub async fn load_file_page(
     Ok(HttpResponse::Ok().body(html))
 }
 
-// Check if a resource is ready to download.
+// Check whether a task is done rendering and the
+// video is ready for download.
 #[get("/done/ready/{progressId}")]
 async fn check_resource_state(
     redis_pool: web::Data<RedisPool>,
     path: web::Path<Uuid>,
 ) -> actix_web::Result<impl actix_web::Responder> {
+    let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
     let progress_id = path.into_inner().to_string();
-    let mut conn = redis_pool.get().await
-        .map_err(|e| e500(e))?;
 
     let progress: String = conn.get(&progress_id).await
         .map_err(|e| e500(e))?;
+
+    // If the value of `progress` is not `PENDING` then this
+    // endpoint will not get called again, because the video is ready
+    // for download. Therefore the key `progress_id` should be deleted
+    // from redis; it will not be used again.
+    if progress != PENDING {
+        conn.del(&progress_id).await
+            .map_err(|e| e500(e))?;
+    }
 
     Ok(web::Json(progress))
 }

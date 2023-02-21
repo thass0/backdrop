@@ -13,8 +13,8 @@
 .action-button--loading::after {
   content: "";
   position: absolute;
-  width: 27px;
-  height: 27px;
+  width: 30px;
+  height: 30px;
   top: 0;
   left: 0;
   right: 0;
@@ -51,7 +51,7 @@
 
     async function fetchReady() {
       // Fetch the state of the rendered file.
-      let response = await fetch('ready/{{file_id}}');
+      let response = await fetch('ready/{{progress_id}}');
       let data = await response.json();
       return data;
     }
