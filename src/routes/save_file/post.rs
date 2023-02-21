@@ -11,8 +11,7 @@ use serde::{Serialize, Deserialize};
 use crate::utils::{derive_error_chain_fmt, e500};
 use crate::routes::errors::RedisQueryError;
 use crate::{RedisPool, RedisConn, PENDING, RENDER_QUEUE_KEY};
-
-const REDIS_DISCARD: &str = "DISCARD";
+use crate::REDIS_DISCARD;
 
 // POST endpoint to upload any file to redis.
 pub async fn save_file(
