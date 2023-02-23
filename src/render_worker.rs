@@ -18,19 +18,26 @@ use crate::{RedisConn, REDIS_DISCARD};
 const ASSETS_DIR: &str = "tmp_assets";
 
 pub async fn run_until_stopped(configuration: Settings) -> anyhow::Result<()> {
+    let wait_duration = configuration.application.worker_laziness.into();
     let redis_pool = get_redis_pool(configuration.redis_uri).await?;
+
+    // Make sure buffer file directory for assets exists.
     tokio::fs::create_dir_all(ASSETS_DIR).await?;
+
     tracing::info!("Set up render worker; Now entering working loop.");
-    worker_loop(redis_pool).await
+    worker_loop(redis_pool, wait_duration).await
 }
 
-async fn worker_loop(redis_pool: RedisPool) -> anyhow::Result<()> {
+async fn worker_loop(
+    redis_pool: RedisPool,
+    wait_duration: u64,
+) -> anyhow::Result<()> {
     loop {
         let task = match get_next_task(redis_pool.clone()).await {
             Ok(QueueQueryOutcome::NewTask(t)) => t,
             Ok(QueueQueryOutcome::EmptyQueue) => {
                 // Wait for queue to fill up.
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(Duration::from_secs(wait_duration)).await;
                 continue;
             },
             Err(e) => {

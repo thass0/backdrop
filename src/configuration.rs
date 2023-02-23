@@ -12,6 +12,12 @@ pub struct ApplicationSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
+    // Amount of time (in seconds) the render worker spends waiting if the render
+    // queue is empty. This is used to decrease the amount of CPU
+    // consumtion if the app stays unused on end. The drawback
+    // is longer waiting times when starting the first render.
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub worker_laziness: u16,
 }
 
 pub enum Environment {
