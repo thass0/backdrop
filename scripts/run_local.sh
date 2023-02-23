@@ -9,12 +9,6 @@ if ! [ -x "$(command -v docker)" ]; then
   exit 1
 fi
 
-if ! [ -x "$(command -v bunyan)" ]; then
-  echo >&2 "Error: bunyan formatter is not installed"
-  echo >&2 "Run 'cargo install bunyan' to install it"
-  exit 1
-fi
-
 REDIS_NAME="redislocal"
 NET_NAME="backdrop-dev-net"
 CONTAINER_TAG="backdrop"
@@ -58,10 +52,23 @@ docker build \
   --tag $CONTAINER_TAG \
   --file Dockerfile .
 
-# Run app
-docker run \
-  -p 8000:8000 \
-  --network $NET_NAME \
-  --env APP_REDIS_URI="redis://${REDIS_NAME}" \
-  $CONTAINER_TAG \
-  | bunyan
+# Run app with optionally pretty printed logs.
+if ! [ -x "$(command -v bunyan)" ]; then
+  echo >&2 "Warning: bunyan formatter is not installed"
+  echo >&2 "  Run 'cargo install bunyan' to install it"
+  # Run without pretty printing
+  docker run \
+    -p 8000:8000 \
+    --network $NET_NAME \
+    --env APP_REDIS_URI="redis://${REDIS_NAME}" \
+    $CONTAINER_TAG
+else
+  # Run with pretty printing
+  docker run \
+    -p 8000:8000 \
+    --network $NET_NAME \
+    --env APP_REDIS_URI="redis://${REDIS_NAME}" \
+    $CONTAINER_TAG \
+    | bunyan
+fi
+
