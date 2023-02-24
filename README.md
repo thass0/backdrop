@@ -47,7 +47,8 @@ $ systemctl --user start docker-desktop
 ```
 
 To run the app itself, you can use the bash script `run_local.sh` located in the
-`scripts` folder.
+`scripts` folder (You have to run the script from the root of this repository so
+Docker can find the Dockerfile).
 
 ```bash
 # Make the script executable.
