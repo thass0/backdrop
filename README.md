@@ -26,7 +26,14 @@ Now you should have an MP4 of the given image with your music playing in the bac
 
 ## Installation
 
-You can run your own instance locally following the steps below.
+Running the following command in you terminal will install and optionally
+run an instance of backdrop:
+
+```bash
+bash -c "$(curl -sLo- https://raw.githubusercontent.com/d4ckard/backdrop/main/scripts/install.sh)"
+```
+
+Alternatively, you can manually install and run your own instance following the steps below.
 
 ### 1. Prerequisites
 
