@@ -3,9 +3,20 @@
 set -x
 set -eo pipefail
 
+# Check whether docker is installed on the host machine.
 if ! [ -x "$(command -v docker)" ]; then
-  echo >&2 "Error: docker is not installed"
-  echo >&2 "Install docker for your system"
+  echo >&2 "Error: Docker is not installed."
+  echo >&2 "Please install Docker for your system (https://docs.docker.com/get-docker/)."
+  echo >&2 "Try running this script again after you have successfully installed Docker."
+  exit 1
+fi
+
+# Check if docker-desktop in running
+DOCKER_ACTIVE=$(systemctl --user --no-pager status docker-desktop | grep "active (running)")
+if ! [[ -n $DOCKER_ACTIVE ]]; then
+  echo >&2 "docker-desktop is not active. Starting docker-desktop"
+  systemctl --user start docker-desktop
+  echo >&2 "Starting docker-desktop might take a while. Please run this script again once Docker is ready."
   exit 1
 fi
 
@@ -52,6 +63,8 @@ docker build \
   --tag $CONTAINER_TAG \
   --file Dockerfile .
 
+echo >&2 "Running backdrop on http://localhost:8000"
+
 # Run app with optionally pretty printed logs.
 if ! [ -x "$(command -v bunyan)" ]; then
   echo >&2 "Warning: bunyan formatter is not installed"
@@ -71,4 +84,3 @@ else
     $CONTAINER_TAG \
     | bunyan
 fi
-
