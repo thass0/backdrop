@@ -8,7 +8,7 @@ use uuid::Uuid;
 use std::ops::DerefMut;
 use std::path::PathBuf;
 
-use crate::configuration::Settings;
+use crate::configuration::{Settings, RenderWorkerSettings};
 use crate::startup::get_redis_pool;
 use crate::{RedisPool, RENDER_QUEUE_KEY};
 use crate::routes::RenderTask;
@@ -18,26 +18,28 @@ use crate::{RedisConn, REDIS_DISCARD};
 const ASSETS_DIR: &str = "tmp_assets";
 
 pub async fn run_until_stopped(configuration: Settings) -> anyhow::Result<()> {
-    let wait_duration = configuration.application.worker_laziness.into();
+    let render_config = configuration.render_worker;
     let redis_pool = get_redis_pool(configuration.redis_uri).await?;
 
     // Make sure buffer file directory for assets exists.
     tokio::fs::create_dir_all(ASSETS_DIR).await?;
 
     tracing::info!("Set up render worker; Now entering working loop.");
-    worker_loop(redis_pool, wait_duration).await
+    worker_loop(redis_pool, render_config).await
 }
 
 async fn worker_loop(
     redis_pool: RedisPool,
-    wait_duration: u64,
+    render_config: RenderWorkerSettings,
 ) -> anyhow::Result<()> {
+    let laziness = render_config.laziness.into();
+    let lifetime = render_config.lifetime;
     loop {
         let task = match get_next_task(redis_pool.clone()).await {
             Ok(QueueQueryOutcome::NewTask(t)) => t,
             Ok(QueueQueryOutcome::EmptyQueue) => {
                 // Wait for queue to fill up.
-                tokio::time::sleep(Duration::from_secs(wait_duration)).await;
+                tokio::time::sleep(Duration::from_secs(laziness)).await;
                 continue;
             },
             Err(e) => {
@@ -52,7 +54,7 @@ async fn worker_loop(
         match try_render_task(&mut conn, &task).await {
             Ok(data) => {
                 // Store finished video in redis and delete its assets.
-                try_save_render(&mut conn, task, &data,).await?;
+                try_save_render(&mut conn, task, &data, lifetime).await?;
             },
             Err(e) => {
                 tracing::error!("Render worker error: {e:?}");
@@ -89,6 +91,7 @@ async fn try_save_render(
     conn: &mut RedisConn,
     task: RenderTask,
     data: &[u8],
+    lifetime_mins: u16,
 ) -> anyhow::Result<()> {
     let video_key = Uuid::new_v4().to_string();
 
@@ -102,6 +105,17 @@ async fn try_save_render(
             redis::cmd(REDIS_DISCARD).query_async(conn.deref_mut()).await
                 .context("failed to abort transaction to save render")?;
             return Err(anyhow::anyhow!("failed to store video data in redis: {e:?}"));
+        },
+    };
+
+    // Set expiration of video data
+    let lifetime_secs: usize = (lifetime_mins * 60).into();
+    let _: () = match conn.expire(&video_key, lifetime_secs).await {
+        Ok(_r) => _r,
+        Err(e) => {
+            redis::cmd(REDIS_DISCARD).query_async(conn.deref_mut()).await
+                .context("failed to abort transaction to save render")?;
+            return Err(anyhow::anyhow!("failed set video data expiration in redis: {e:?}"));
         },
     };
 

@@ -7,15 +7,7 @@ use uuid::Uuid;
 
 use crate::utils::{e500, derive_error_chain_fmt};
 use crate::routes::errors::{TeraError, RedisQueryError};
-use crate::{RedisPool, PENDING};
-
-/*
-Important: Currently all ID pointing to a finished video
-as well as the finished video are deleted from redis, after
-they were retrieved for the first time.
-This mean that each progress ID and video assets can only
-be used (retrieved) once.
-*/
+use crate::{RedisPool, PENDING, GONE, REDIS_TTL_EXPIRED};
 
 // The name of a rendered file
 const FILE_NAME: &str = "backdrop.mp4";
@@ -23,7 +15,6 @@ const FILE_NAME: &str = "backdrop.mp4";
 // GET endpoint to download any pending file from redis.
 // The `GET /done/ready` endpoint will return a vaild key to the
 // video data for a given process ID, once a video is done rendering.
-// The finished video resource is deleted once this endpoind is called.
 #[get("/load/{videoKey}")]
 pub async fn load_file(
     redis_pool: web::Data<RedisPool>,
@@ -32,10 +23,10 @@ pub async fn load_file(
     let mut conn = redis_pool.get().await.map_err(|e| e500(e))?;
     let video_key = path.into_inner().to_string();
 
-    let data: Vec<u8> = conn.get_del(&video_key).await
+    let data: Vec<u8> = conn.get(&video_key).await
         .map_err(|e| e500(e))?;  // opaque error to make it harder to use
                                  // this endpoint for random queries.
-                                 // TODO: Add auth to this endpoint.    
+                                 // TODO: Add auth to this endpoint.
 
     Ok(HttpResponse::Ok()
         .insert_header((CONTENT_TYPE, "video/mp4"))
@@ -65,6 +56,9 @@ pub async fn load_file_page(
     // is done or not. In case the video is not ready, the endpoint will
     // return the contents of `PENDING`, so `PENDING` has to be used for the check, too.
     ctx.insert("pending_msg", PENDING);
+    // `gone_msg` is used to check whether the response from `GET /done/ready`
+    // indicated that the assets has been deleted.
+    ctx.insert("gone_msg", GONE);
 
     let html = tera.render("file_load.html", &ctx)
         .map_err(|e| TeraError(e))?;
@@ -84,16 +78,32 @@ async fn check_resource_state(
     let progress: String = conn.get(&progress_id).await
         .map_err(|e| e500(e))?;
 
-    // If the value of `progress` is not `PENDING` then this
-    // endpoint will not get called again, because the video is ready
-    // for download. Therefore the key `progress_id` should be deleted
-    // from redis; it will not be used again.
-    if progress != PENDING {
-        conn.del(&progress_id).await
-            .map_err(|e| e500(e))?;
+    // If `progress` is set to `PENDING`, the video has not yet finished
+    // rendering. The client should wait and try again.
+    if progress == PENDING {
+        return Ok(web::Json(progress));
     }
 
-    Ok(web::Json(progress))
+    // If `progress` is not set to `PENDING` it contains the key of the
+    // finished video.
+    let video_key = progress;
+    // Now we can check if the video is still available.
+    // We return the video key if this is the case. Otherwise, the `GONE`
+    // message is returned to the client to indicate that the video is deleted now.
+    let video_lifetime: i32 = conn.ttl(&video_key).await
+        .map_err(|e| e500(e))?;
+
+    if video_lifetime == REDIS_TTL_EXPIRED {
+        // This endpoint should not be called anymore after the `GONE`
+        // response was sent once. Because of this the progress key should
+        // now get deleted too.
+        conn.del(&progress_id).await
+            .map_err(|e| e500(e))?;
+        // Indicate to the client that the video is no longer available.
+        Ok(web::Json(GONE.to_owned()))
+    } else {
+        Ok(web::Json(video_key))
+    }
 }
 
 

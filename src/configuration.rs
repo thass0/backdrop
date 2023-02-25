@@ -4,6 +4,7 @@ use secrecy::Secret;
 #[derive(Clone, serde::Deserialize)]
 pub struct Settings {
     pub application: ApplicationSettings,
+    pub render_worker: RenderWorkerSettings,
     pub redis_uri: Secret<String>,
 }
 
@@ -12,12 +13,20 @@ pub struct ApplicationSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
+}
+
+#[derive(Clone, serde::Deserialize)]
+pub struct RenderWorkerSettings {
     // Amount of time (in seconds) the render worker spends waiting if the render
     // queue is empty. This is used to decrease the amount of CPU
     // consumtion if the app stays unused on end. The drawback
     // is longer waiting times when starting the first render.
     #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub worker_laziness: u16,
+    pub laziness: u16,
+    // Amount of time (in minutes) until a finished render
+    // is deleted again.
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub lifetime: u16,
 }
 
 pub enum Environment {
