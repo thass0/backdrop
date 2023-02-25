@@ -11,13 +11,16 @@ if ! [ -x "$(command -v docker)" ]; then
   exit 1
 fi
 
-# Check if docker-desktop in running
-DOCKER_ACTIVE=$(systemctl --user --no-pager status docker-desktop | grep "active (running)")
-if ! [[ -n $DOCKER_ACTIVE ]]; then
-  echo >&2 "docker-desktop is not active. Starting docker-desktop"
-  systemctl --user start docker-desktop
-  echo >&2 "Starting docker-desktop might take a while. Please run this script again once Docker is ready."
-  exit 1
+# Linux only check for active docker daemon.
+if [ -x "$(command -v systemctl)" ]; then
+  # Check if docker-desktop in running
+  DOCKER_ACTIVE=$(systemctl --user --no-pager status docker-desktop | grep "active (running)")
+  if ! [[ -n $DOCKER_ACTIVE ]]; then
+    echo >&2 "docker-desktop is not active. Starting docker-desktop"
+    systemctl --user start docker-desktop
+    echo >&2 "Starting docker-desktop might take a while. Please run this script again once Docker is ready."
+    exit 1
+  fi
 fi
 
 REDIS_NAME="redislocal"
