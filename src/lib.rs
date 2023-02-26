@@ -13,6 +13,8 @@ pub type RedisConn = mobc::Connection<mobc_redis::RedisConnectionManager>;
 pub const PENDING: &str = "pending";
 // Indicate a requested assets has been deleted.
 pub const GONE: &str = "gone";
+// Indicate a requested asset is ready for download.
+pub const READY: &str = "ready";
 // Redis key for the render queue
 pub const RENDER_QUEUE_KEY: &str = "render-worker-queue";
 // Redis discard command name (I am afraid I will misspell it otherwise).

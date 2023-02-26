@@ -1,13 +1,14 @@
-use actix_web::{web, get, HttpResponse, ResponseError};
+use actix_web::{web, get, HttpResponse, HttpRequest, ResponseError, Responder};
 use actix_web::http::StatusCode;
 use actix_web::http::header::{ContentDisposition, CONTENT_TYPE};
 use tera::{Tera, Context};
 use redis::AsyncCommands;
 use uuid::Uuid;
+use serde::Serialize;
 
 use crate::utils::{e500, derive_error_chain_fmt};
 use crate::routes::errors::{TeraError, RedisQueryError};
-use crate::{RedisPool, PENDING, GONE, REDIS_TTL_EXPIRED};
+use crate::{RedisPool, PENDING, GONE, READY, REDIS_TTL_EXPIRED};
 
 // The name of a rendered file
 const FILE_NAME: &str = "backdrop.mp4";
@@ -51,14 +52,21 @@ pub async fn load_file_page(
     ctx.insert("progress_id", &progress_id);
     // Name of the video file to download.
     ctx.insert("filename", FILE_NAME);  
-    // `pending_msg` in the template is used to check whether the last value
-    // returned by the `GET /done/ready` endpoint inidcated that the video
-    // is done or not. In case the video is not ready, the endpoint will
-    // return the contents of `PENDING`, so `PENDING` has to be used for the check, too.
+    // `ready_`, `gone_` and `pending_msg` are used to evaluate the responses
+    // from `GET /done/ready`. This endpont will responsd with the same constants (`READY`, ...) 
+    // depending on the progress of the video.
     ctx.insert("pending_msg", PENDING);
-    // `gone_msg` is used to check whether the response from `GET /done/ready`
-    // indicated that the assets has been deleted.
     ctx.insert("gone_msg", GONE);
+    ctx.insert("ready_msg", READY);
+    // The following headings and info elements are used to switch up
+    // the content displayed on the page at different steps in the rendering progress.
+    ctx.insert("pending_heading", "Your video is being rendered!");
+    ctx.insert("pending_info", "This might take a few seconds. You can download the result once it is ready.");
+    ctx.insert("ready_heading", "Download your backdrop video!");
+    ctx.insert("ready_info", "Your video has successfully finished rendering. It will be deleted from the \
+        server in a few minutes");
+    ctx.insert("gone_heading", "Assets are deleted");
+    ctx.insert("gone_info", "The requested video and all assets used to create this video have been deleted.");
 
     let html = tera.render("file_load.html", &ctx)
         .map_err(|e| TeraError(e))?;
@@ -81,7 +89,7 @@ async fn check_resource_state(
     // If `progress` is set to `PENDING`, the video has not yet finished
     // rendering. The client should wait and try again.
     if progress == PENDING {
-        return Ok(web::Json(progress));
+        return Ok(VideoProgress::Pending);
     }
 
     // If `progress` is not set to `PENDING` it contains the key of the
@@ -100,12 +108,46 @@ async fn check_resource_state(
         conn.del(&progress_id).await
             .map_err(|e| e500(e))?;
         // Indicate to the client that the video is no longer available.
-        Ok(web::Json(GONE.to_owned()))
+        Ok(VideoProgress::Gone)
     } else {
-        Ok(web::Json(video_key))
+        Ok(VideoProgress::Ready(video_key))
     }
 }
 
+#[derive(Debug)]
+enum VideoProgress {
+    Pending,
+    Gone,
+    Ready(String),
+}
+
+impl Responder for VideoProgress {
+    type Body = actix_web::body::EitherBody<String>;
+
+    fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
+        match self {
+            VideoProgress::Pending => web::Json(ProgressResponse {
+                progress: PENDING.to_owned(),
+                video_key: None,
+            }).respond_to(req),
+            VideoProgress::Gone => web::Json(ProgressResponse {
+                progress: GONE.to_owned(),
+                video_key: None,
+            }).respond_to(req),
+            VideoProgress::Ready(key) => web::Json(ProgressResponse {
+                progress: READY.to_owned(),
+                video_key: Some(key),
+            }).respond_to(req),
+        }
+    }
+}
+
+// Struct used by `VideoProgress` to create JSON responses.
+#[derive(Debug, Serialize)]
+struct ProgressResponse {
+    progress: String,
+    video_key: Option<String>,
+}
 
 // Error returned by `load_file` endpoint.
 #[derive(thiserror::Error)]

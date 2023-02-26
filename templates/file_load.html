@@ -38,19 +38,32 @@
 </style>
 {% endblock style %}
 {% block content %}
-  <h1>Your video is being rendered!</h1>
-  <p>This might take a few seconds. You can download the result once it is ready.</p>
+  <h1 id="download-heading">{{pending_heading}}</h1>
+  <p id="download-info">{{pending_info}}</p>
   <form id="download-form" method="get">  <!-- the action is set once the file is ready.-->
     <button id="download-button" class="action-button action-button--loading" type="submit">
       <span class="button_text">{{filename}}</span>
     </button>
   </form>
   <script>
+    // Set the content of the page's heading
+    function updateDownloadHeading(msg) {
+      const heading = document.getElementById('download-heading');
+      heading.innerHTML = msg;
+    }
+    // Set the content of the page's info paragraph
+    function updateDownloadInfo(msg) {
+      const info = document.getElementById('download-info');
+      info.innerHTML = msg;
+    }
+    
     // Set download button to disabled and loading.
     function awaitDownload() {
       const button = document.getElementById('download-button');
       button.disabled = true;
       button.classList.add('action-button--loading');
+      updateDownloadHeading('{{pending_heading}}');
+      updateDownloadInfo('{{pending_info}}');
     }
 
     // Enable the download.
@@ -61,6 +74,8 @@
       const button = document.getElementById('download-button');
       button.disabled = false;
       button.classList.remove('action-button--loading');
+      updateDownloadHeading('{{ready_heading}}');
+      updateDownloadInfo('{{ready_info}}');
     }
 
     // Disable the download.
@@ -68,6 +83,8 @@
       const button = document.getElementById('download-button');
       button.disabled = true;
       button.classList.remove('action-button--loading');
+      updateDownloadHeading('{{gone_heading}}');
+      updateDownloadInfo('{{gone_info}}');
     }
 
     // Query the API to check whether the given video resource is ready.
@@ -78,33 +95,36 @@
       return data;
     }
 
-  // Update the button depending on the state of the video.
-  async function updateDownloadButton() {
-      let received = '';
+    // Update the download page depending on the state of the video.
+    async function updateDownload() {
+      let response;
+      let timeout;
       while (true) {
         await fetchReady()
           .then(data => {
             console.log(data);
-            received = data;
+            response = data;
           })
           .catch(reason => console.log(reason.message));
 
-        if (received === '{{pending_msg}}') {
+        if (response.progress === '{{pending_msg}}') {
           awaitDownload();
-        } else if (received === '{{gone_msg}}') {
+          timeout = 1000;
+        } else if (response.progress === '{{gone_msg}}') {
           disableDownload();
           break;
-        } else {
-          enableDownload(received)
+        } else if (response.progress === '{{ready_msg}}'){
+          enableDownload(response.video_key)
+          timeout = 5000;
         }
 
         // Wait between requests
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, timeout));
       }
     }
 
     awaitDownload();  // Set button to await as default
-    updateDownloadButton();
+    updateDownload();
   </script>
 {% endblock content %}
   
