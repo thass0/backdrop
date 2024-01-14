@@ -14,7 +14,7 @@ if ! [ -x "$(command -v git)" ]; then
 fi
 
 # Clone the git repository and cd into it.
-git clone https://github.com/d4ckard/backdrop.git || { echo >&2 "Git clone failed with $?"; exit 1; }
+git clone https://github.com/thass0/backdrop.git || { echo >&2 "Git clone failed with $?"; exit 1; }
 cd backdrop
 
 # Exit now if the user does not want to run an instance.

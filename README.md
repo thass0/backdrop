@@ -30,7 +30,7 @@ Running the following command in you terminal will install and optionally
 run an instance of backdrop:
 
 ```bash
-bash -c "$(curl -sLo- https://raw.githubusercontent.com/d4ckard/backdrop/main/scripts/install.sh)"
+bash -c "$(curl -sLo- https://raw.githubusercontent.com/thass0/backdrop/main/scripts/install.sh)"
 ```
 
 Alternatively, you can manually install and run your own instance following the steps below.
@@ -73,4 +73,4 @@ After the build is finished and the app is running, you should be able
 to find it in your browser under [http://localhost:8000/](http://localhost:8000/).
 
 Otherwise, if you run into a problem building the image please
-file an [issue](https://github.com/d4ckard/backdrop/issues).
+file an [issue](https://github.com/thass0/backdrop/issues).
